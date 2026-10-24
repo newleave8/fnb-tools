@@ -5,6 +5,7 @@ const app='https://script.google.com/macros/s/AKfycbx-Q3g0ev2g4mJhYpI_ttSn_zwuyw
 const channel='fnb-auth-v1',storageKey='fnb-hub-session-v1';
 const nonce=Array.from(crypto.getRandomValues(new Uint8Array(24)),x=>x.toString(16).padStart(2,'0')).join('');
 let peer=null,peerOrigin='',token='',expires=0,frame,readyResolve,readyReject;
+let adminToken='';
 const pending=new Map();
 const ready=new Promise((resolve,reject)=>{readyResolve=resolve;readyReject=reject;});
 ready.catch(()=>{});
@@ -24,10 +25,17 @@ async function request(action,body={}){
   pending.set(id,{resolve,reject,timer});peer.postMessage({channel,nonce,id,action,...body},peerOrigin);
  });
 }
+window.FNBHubAdmin={
+ async login(username,password){let result;try{result=await request('login',{username,password});const data=await request('adminState',{token:result.token});if(adminToken)request('logout',{token:adminToken}).catch(()=>{});adminToken=result.token;return data;}catch(e){if(result?.token)request('logout',{token:result.token}).catch(()=>{});throw e;}},
+ state:()=>request('adminState',{token:adminToken}),
+ save:payload=>request('adminSave',{token:adminToken,payload}),
+ logout(){const old=adminToken;adminToken='';if(old)request('logout',{token:old}).catch(()=>{});},
+ refresh:()=>request('state',{token})
+};
 window.addEventListener('DOMContentLoaded',()=>{
  const el=id=>document.getElementById(id);
  const forget=()=>{token='';expires=0;try{sessionStorage.removeItem(storageKey);}catch{}};
- const lock=message=>{forget();window.FNB_TOOLS=[];el('cards').innerHTML='';el('hubWorkspace').hidden=true;el('hubLogin').hidden=false;el('hubError').textContent=message||'';};
+ const lock=message=>{window.FNBHubAdmin.logout();window.dispatchEvent(new Event('fnb-hub-locked'));forget();window.FNB_TOOLS=[];el('cards').innerHTML='';el('hubWorkspace').hidden=true;el('hubLogin').hidden=false;el('hubError').textContent=message||'';};
  const show=tools=>{window.FNB_TOOLS=tools;el('hubLogin').hidden=true;el('hubWorkspace').hidden=false;el('hubError').textContent='';render();};
  const save=()=>{try{sessionStorage.setItem(storageKey,JSON.stringify({token,expires}));}catch{}};
  el('hubLoginForm').onsubmit=async event=>{
@@ -51,6 +59,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   try{show(await request('state',{token}));}catch(e){lock(e.message);}
  })();
  setInterval(()=>{if(token&&Date.now()>=expires)lock('로그인이 만료됐습니다. 다시 로그인하세요.');},15000);
+ window.addEventListener('focus',()=>{if(token&&Date.now()<expires)request('state',{token}).then(show).catch(e=>{if(e.message.includes('AUTH_REQUIRED'))lock(e.message);});});
  window.addEventListener('pageshow',()=>{if(token&&Date.now()>=expires)lock('로그인이 만료됐습니다. 다시 로그인하세요.');});
 });
 })();
