@@ -10,7 +10,6 @@ const el=id=>document.getElementById(id);
 function randomId(){return Array.from(crypto.getRandomValues(new Uint8Array(24)),x=>x.toString(16).padStart(2,'0')).join('');}
 function permitted(origin){try{const u=new URL(origin);return u.protocol==='https:'&&(u.hostname==='script.google.com'||u.hostname.endsWith('-script.googleusercontent.com'));}catch{return false;}}
 function help(message){
- const box=el('hubConnectionHelp');if(box)box.hidden=false;
  if(message&&el('hubError'))el('hubError').textContent=message;
 }
 function resetBridge(){
@@ -25,7 +24,7 @@ function connect(){
  current.ready=new Promise((resolve,reject)=>{current.resolve=resolve;current.reject=reject;});
  current.ready.catch(()=>{});
  current.frame.className='auth-frame';current.frame.title='로그인 검증';current.frame.setAttribute('aria-hidden','true');current.frame.tabIndex=-1;current.frame.referrerPolicy='no-referrer';
- const fail=()=>{if(bridge!==current||current.peer)return;current.failed=true;clearTimeout(current.timer);current.reject(Error('브라우저 안의 인증 연결이 지연됩니다. 아래 직접 로그인 또는 인증 연결 재시도를 이용하세요.'));help('인증 연결이 지연됩니다. 직접 로그인 화면을 이용하거나 연결을 다시 시도하세요.');};
+ const fail=()=>{if(bridge!==current||current.peer)return;current.failed=true;clearTimeout(current.timer);current.reject(Error('브라우저 안의 인증 연결이 지연됩니다. 로그인 버튼을 다시 눌러 주세요.'));help('인증 연결이 지연됩니다. 로그인 버튼을 다시 눌러 연결을 다시 시도하세요.');};
  current.frame.onerror=fail;
  current.timer=setTimeout(fail,connectTimeout);
  current.frame.src=app+'?view=auth&nonce='+current.nonce;
@@ -45,7 +44,7 @@ async function request(action,body={}){
  const ready=connect(),current=bridge;await ready;
  if(bridge!==current||current.failed)throw Error('인증 연결을 다시 시도해 주세요.');
  return new Promise((resolve,reject)=>{
-  const id=randomId(),timer=setTimeout(()=>{pending.delete(id);current.failed=true;help();reject(Error('인증 응답이 지연됩니다. 직접 로그인 또는 인증 연결 재시도를 이용하세요.'));},requestTimeout);
+  const id=randomId(),timer=setTimeout(()=>{pending.delete(id);current.failed=true;help();reject(Error('인증 응답이 지연됩니다. 로그인 버튼을 다시 눌러 주세요.'));},requestTimeout);
   pending.set(id,{resolve,reject,timer});
   try{current.peer.postMessage({channel,nonce:current.nonce,id,action,...body},current.origin);}
   catch(error){clearTimeout(timer);pending.delete(id);reject(error);}
@@ -63,14 +62,6 @@ window.addEventListener('DOMContentLoaded',()=>{
  const lock=message=>{generation++;window.FNBHubAdmin.logout();window.dispatchEvent(new Event('fnb-hub-locked'));forget();window.FNB_TOOLS=[];el('cards').innerHTML='';el('hubWorkspace').hidden=true;el('hubLogin').hidden=false;el('hubError').textContent=message||'';};
  const show=tools=>{if(!Array.isArray(tools))throw Error('도구 목록 응답을 확인할 수 없습니다.');window.FNB_TOOLS=tools;render();el('hubLogin').hidden=true;el('hubWorkspace').hidden=false;el('hubError').textContent='';};
  const save=()=>{try{sessionStorage.setItem(storageKey,JSON.stringify({token,expires}));}catch{}};
- // Top-level Apps Script uses the same login and token checks without a third-party iframe.
- if(el('hubDirectLogin'))el('hubDirectLogin').href=app+'?view=hub';
- if(el('hubReconnect'))el('hubReconnect').onclick=async()=>{
-  const attempt=++generation;resetBridge();el('hubSubmit').disabled=false;
-  el('hubError').textContent='인증 연결을 다시 확인 중입니다.';
-  try{await connect();if(attempt===generation)el('hubError').textContent='인증 서버에 연결됐습니다. 로그인해 주세요.';}
-  catch(e){if(attempt===generation)help(e.message);}
- };
  el('hubLoginForm').onsubmit=async event=>{
   event.preventDefault();const attempt=++generation;el('hubSubmit').disabled=true;
   el('hubError').textContent='로그인 확인 중입니다.';
